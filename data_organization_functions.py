@@ -14,13 +14,19 @@ Here is the list of functions defined in your code:
 
 3. ***get_basenames_of_folders_within_parent_folder(folders)
    - Extracts the first part of each subfolder name within a list of parent folders.
+   
+4. ***get_basenames_of_folders_within_parent_folder_alternate(folders)
+	- Extracts a different part of each subfolder name within a list of parent folders.
 
-4. ***downsample_frames(frames, downsample_rate)
+5. ***downsample_frames(frames, downsample_rate)
    - Downsamples frames by skipping frames based on the specified downsample rate.
 
-5. ***concatenate_videos(parent_folders, filetype, saveas_filenames, downsample_rate=None)
+6. ***concatenate_videos(parent_folders, filetype, saveas_filenames, downsample_rate=None)
    - Concatenates video files from specified parent folders, saves the concatenated and downsampled videos, and deletes the original files.
 
+7. ***move_data_folders(input_path, output_path)
+
+8. ***concatenate_timestamp_files(folder)
 
 """
 
@@ -30,6 +36,8 @@ import os
 import shutil
 from natsort import natsorted
 import cv2
+import pandas as pd
+import re
 
 def rename_files_with_prefix(parent_folders, subfolder_names):
     for parent_folder in parent_folders:
@@ -112,6 +120,21 @@ def get_basenames_of_folders_within_parent_folder(folders):
 
     return first_parts
 
+def get_basenames_of_folders_within_parent_folder_alternate(folders):
+	# Use os.path.commonpath to get the common parent folder
+	common_parent_folder = os.path.commonpath(folders)
+
+	# Use os.path.relpath to get the relative path from the common parent
+	relative_paths = [os.path.relpath(folder, common_parent_folder) for folder in folders]
+
+	# Split each relative path and take the first part
+	folder_name_parts = [os.path.split(relative_path)[1].split(os.path.sep) for relative_path in relative_paths]
+
+	# Take the first part of each split folder name
+	#first_parts = [parts[1] for parts in folder_name_parts]
+
+	return folder_name_parts
+	
 def downsample_frames(frames, downsample_rate):
     return frames[::downsample_rate]
 
@@ -197,3 +220,97 @@ def move_data_folders(input_path, output_path):
         print(f"Source folder '{input_path}' not found.")
     except shutil.Error as e:
         print(f"Error moving folder '{input_path}': {e}")
+		
+
+
+def concatenate_timestamp_files(folder, file_extension='_timeStamps.csv', downsample=False):
+
+    # Construct the path to the timestamp files in the same directory as the video file
+    timestamp_files = [file for file in os.listdir(folder) if file.endswith(file_extension)]
+
+    # Sort the files based on the numerical part of the filename
+    timestamp_files.sort(key=lambda x: int(re.search(r'\d+', x).group()))
+
+    # Print the sorted file names
+    print("Sorted Timestamp Files:")
+    for file_name in timestamp_files:
+        print(file_name)
+
+    # Initialize the cumulative frame number and timestamp
+    cumulative_frame_number = 0
+    cumulative_timestamp = 0
+
+    # Initialize an empty DataFrame to store concatenated timestamps
+    concatenated_timestamps = pd.DataFrame()
+
+    # Iterate through the timestamp files
+    for file_name in timestamp_files:
+        # Read the timestamp file
+        file_path = os.path.join(folder, file_name)
+        timestamp_data = pd.read_csv(file_path)
+
+        # Adjust the frame numbers by adding the cumulative frame number
+        timestamp_data['adjusted_frame_number'] = timestamp_data['Frame Number'] + cumulative_frame_number
+
+        # Adjust the timestamps by adding the cumulative timestamp
+        timestamp_data['merged_timestamps'] = timestamp_data['Time Stamp (ms)'] + cumulative_timestamp
+
+        # Round the timestamp to the nearest whole number
+        timestamp_data['merged_timestamps'] = timestamp_data['merged_timestamps'].round()
+
+        # Concatenate the adjusted timestamps to the DataFrame
+        concatenated_timestamps = pd.concat([concatenated_timestamps, timestamp_data])
+
+        # Update the cumulative frame number and timestamp for the next iteration
+        cumulative_frame_number += timestamp_data['Frame Number'].iloc[-1] + 1
+        cumulative_timestamp += timestamp_data['Time Stamp (ms)'].iloc[-1] + timestamp_data['Time Stamp (ms)'].diff().mean()
+
+    # Optionally downsample by removing every other row
+    if downsample:
+        concatenated_timestamps = concatenated_timestamps.iloc[::2, :]
+
+    # Save the concatenated and adjusted timestamps to a new file named "timeStamps.csv"
+    concatenated_file_path = os.path.join(folder, 'timeStamps.csv')
+    concatenated_timestamps.to_csv(concatenated_file_path, index=False)
+
+    print("Concatenated, merged, and rounded timestamp file saved as 'timeStamps.csv'.")
+
+
+def concatenate_h5_files(folder, file_extension='.h5', downsample=False):
+    # Construct the path to the H5 files in the specified directory
+    h5_files = [file for file in os.listdir(folder) if file.endswith(file_extension)]
+
+    # Sort the files based on the numerical part of the filename
+    h5_files.sort(key=lambda x: int(re.search(r'\d+', x).group()))
+
+    # Print the sorted file names
+    print("Sorted H5 Files:")
+    for file_name in h5_files:
+        print(file_name)
+
+    # Initialize an empty list to store DataFrames
+    dataframes = []
+
+    # Iterate through the H5 files
+    for file_name in h5_files:
+        # Read the H5 file using pd.read_hdf
+        file_path = os.path.join(folder, file_name)
+        data = pd.read_hdf(file_path)  # Adjust 'key' based on your actual H5 file structure
+
+   
+
+        # Append the data to the list
+        dataframes.append(data)
+
+    # Concatenate all DataFrames in the list along rows
+    concatenated_data = pd.concat(dataframes, axis=0, ignore_index=True)
+
+    # Optionally downsample by removing every other row
+    if downsample:
+        concatenated_data = concatenated_data.iloc[::2, :]
+
+    # Save the concatenated data to a new H5 file named "positions.h5"
+    concatenated_file_path = os.path.join(folder, 'positions.h5')
+    concatenated_data.to_hdf(concatenated_file_path, key='/bodyparts', mode='w', format='table', index=False)
+
+    print("Concatenated data saved as 'positions.h5'.")
