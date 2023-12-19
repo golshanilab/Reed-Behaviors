@@ -120,6 +120,14 @@ def get_basenames_of_folders_within_parent_folder(folders):
 
     return first_parts
 
+def get_basenames_of_folders_within_parent_folder_chrysa(folders):
+    # Use os.path.commonpath to get the common parent folder
+    common_parent_folder = os.path.commonpath(folders)
+    # Use os.path.relpath to get the relative path from the common parent
+    relative_paths = [os.path.relpath(folder, common_parent_folder) for folder in folders]
+    
+    return relative_paths
+    
 def get_basenames_of_folders_within_parent_folder_alternate(folders):
 	# Use os.path.commonpath to get the common parent folder
 	common_parent_folder = os.path.commonpath(folders)
