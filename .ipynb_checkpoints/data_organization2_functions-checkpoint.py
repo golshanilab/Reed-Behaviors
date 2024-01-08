@@ -148,19 +148,20 @@ def get_basenames_of_folders_within_parent_folder_alternate(folders):
 def downsample_frames(frames, downsample_rate):
     return frames[::downsample_rate]
 
-def concatenate_videos(parent_folders, filetype, saveas_filenames, downsample_rate=None):
-    for parent_folder, saveas_filename in zip(parent_folders,saveas_filenames):
+
+def concatenate_videos(parent_folder, filetype, saveas_filenames, downsample_rate=None):
+    for saveas_filename in saveas_filenames:
         # Find all files of the specified filetype in the parent folder
         video_files = [f for f in os.listdir(parent_folder) if f.endswith('.' + filetype)]
         video_files = natsorted(video_files)  # Sort using natsort
         print(video_files)
-        
+
         # Check if there are at least two video files to concatenate
         if len(video_files) < 2:
             print(f"Insufficient number of video files for concatenation in {parent_folder}.")
-            continue
+            return  # Use 'return' instead of 'continue' if this is not in a loop
+
         output_folder = parent_folder
-   
         video_frames = []
 
         # Iterate through video files and read frames
@@ -174,15 +175,16 @@ def concatenate_videos(parent_folders, filetype, saveas_filenames, downsample_ra
                 video_frames.append(frame)
 
             video.release()
+
         if downsample_rate is None:
             downsample_rate = 2
-            
+
         # Downsample frames
         downsampled_frames = downsample_frames(video_frames, downsample_rate)
 
         # Create output video file
         output_file_path = os.path.join(output_folder, saveas_filename + '.' + filetype)
-        
+
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         output = cv2.VideoWriter(output_file_path, fourcc, 30, (video_frames[0].shape[1], video_frames[0].shape[0]))
 
@@ -209,6 +211,8 @@ def concatenate_videos(parent_folders, filetype, saveas_filenames, downsample_ra
 
         print(f"Concatenated video for {os.path.basename(parent_folder)} saved as {saveas_filename}_{os.path.basename(parent_folder)}_original.{filetype} in {output_folder}")
         print(f"Downsampled video for {os.path.basename(parent_folder)} saved as {saveas_filename}_{os.path.basename(parent_folder)}_downsampled.{filetype} in {output_folder}")
+
+
 
 def move_data_folders(input_path, output_path):
     """
